@@ -1,17 +1,19 @@
 POWERS = ["AUSTRIA", "ENGLAND", "FRANCE", "GERMANY", "ITALY", "RUSSIA", "TURKEY"]
 
 
-def build_current_state(game, phase=None):
+def build_current_state(game, phase=None, submitted_orders=None):
     """Extract the current board state from a diplomacy Game object."""
     units = {}
     supply_centers = {}
     orders = {}
+    submitted_orders = submitted_orders or {}
 
     for power in POWERS:
         p = game.powers[power]
         units[power] = list(p.units)
         supply_centers[power] = list(p.centers)
-        orders[power] = list(game.get_orders(power))
+        order_snapshot = submitted_orders[power] if power in submitted_orders else game.get_orders(power)
+        orders[power] = list(order_snapshot)
 
     return {
         "turn": phase or game.get_current_phase(),
@@ -62,7 +64,7 @@ def build_observation(target_player, current_state, history, comm_tracker, publi
             "orders": current_state["orders"],
             "conflicts": current_state["conflicts"],
         },
-        "history": history,
+        "history": history[-5:],
         "communications": communication,
         "communication_shift": _compute_communication_shift(comm_tracker),
         "public_chat": public_chat,

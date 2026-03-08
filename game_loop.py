@@ -233,10 +233,12 @@ async def run_game(max_turns=20):
         private_messages_this_turn = {}
         public_messages_this_turn = []
         strategies = {}
+        submitted_orders = {power: [] for power in POWERS}
 
         for r in results:
             power = r["power"]
             validated = _validate_orders(game, power, r["orders"])
+            submitted_orders[power] = list(validated)
             game.set_orders(power, validated)
             strategies[power] = r["strategy"]
             if r["private_messages"]:
@@ -251,10 +253,10 @@ async def run_game(max_turns=20):
             "messages": [(s, m) for s, m in public_messages_this_turn],
         })
 
-        game.process()
-
-        current_state = build_current_state(game, phase=phase)
+        current_state = build_current_state(game, phase=phase, submitted_orders=submitted_orders)
         history.append(current_state)
+
+        game.process()
 
         if turn >= 4:
             for power in POWERS:
