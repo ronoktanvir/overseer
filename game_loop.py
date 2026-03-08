@@ -11,7 +11,7 @@ from observation import POWERS, build_current_state, build_observation
 
 MODEL = "claude-haiku-4-5-20251001"
 client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-_connection_semaphore = asyncio.Semaphore(3)
+_connection_semaphore = asyncio.Semaphore(7)
 
 
 def _parse_section(text, header):
@@ -144,6 +144,9 @@ async def call_player_agent(power, game, private_messages_this_turn, public_mess
     orders = [line.strip() for line in orders_raw.splitlines() if line.strip()]
 
     strategy = _parse_section(text, "STRATEGY:")
+    if not strategy:
+        print(f"  Warning: {power} returned empty strategy, using fallback")
+        strategy = "No strategy provided"
     private_msgs = _parse_private_messages(_parse_section(text, "PRIVATE MESSAGES:"))
     public_msg = _parse_section(text, "PUBLIC MESSAGE:")
     if public_msg.lower() == "none":
@@ -248,7 +251,9 @@ async def run_game(max_turns=20):
             "messages": [(s, m) for s, m in public_messages_this_turn],
         })
 
-        current_state = build_current_state(game)
+        game.process()
+
+        current_state = build_current_state(game, phase=phase)
         history.append(current_state)
 
         if turn >= 4:
@@ -264,8 +269,6 @@ async def run_game(max_turns=20):
                     "observation": obs,
                     "true_strategy": strategies.get(power, ""),
                 })
-
-        game.process()
 
     game_data = {
         "training_data": training_data,
