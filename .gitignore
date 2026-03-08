@@ -13,3 +13,7 @@ openenv_overseer.egg-info/
 outputs/*
 
 game_data*.json
+game_data*.json
+game_data*.json
+game_data_fin.json
+duplicate_game_data.py
