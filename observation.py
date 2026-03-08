@@ -1,7 +1,7 @@
 POWERS = ["AUSTRIA", "ENGLAND", "FRANCE", "GERMANY", "ITALY", "RUSSIA", "TURKEY"]
 
 
-def build_current_state(game):
+def build_current_state(game, phase=None):
     """Extract the current board state from a diplomacy Game object."""
     units = {}
     supply_centers = {}
@@ -14,7 +14,7 @@ def build_current_state(game):
         orders[power] = list(game.get_orders(power))
 
     return {
-        "turn": game.get_current_phase(),
+        "turn": phase or game.get_current_phase(),
         "units": units,
         "supply_centers": supply_centers,
         "orders": orders,
