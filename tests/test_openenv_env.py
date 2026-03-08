@@ -69,6 +69,20 @@ class OverseerEnvironmentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(env.state.index, 1)
         self.assertIsNone(env.state.current_target_player)
 
+    async def test_mismatched_target_player_is_ignored(self):
+        env = OverseerEnvironment(
+            samples=[make_sample("AUSTRIA", "S1902M", "Push south.")],
+            judge_fn=lambda target, truth, prediction: 1.0 if target == "AUSTRIA" else 0.0,
+        )
+        env.reset()
+
+        terminal_obs = await env.step_async(
+            OverseerAction(target_player="FRANCE", prediction="Austria wants to push south.")
+        )
+
+        self.assertTrue(terminal_obs.done)
+        self.assertEqual(terminal_obs.reward, 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

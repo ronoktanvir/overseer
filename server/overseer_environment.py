@@ -99,12 +99,6 @@ class OverseerEnvironment(Environment[OverseerAction, OverseerObservation, Overs
         sample = self._current_sample()
         expected_target = sample["observation"]["target_player"]
 
-        if action.target_player and action.target_player.upper() != expected_target:
-            raise ValueError(
-                f"Action target_player={action.target_player!r} does not match current observation target "
-                f"{expected_target!r}."
-            )
-
         judge_result = self._judge_fn(expected_target, sample["true_strategy"], action.prediction)
         if asyncio.iscoroutine(judge_result):
             reward = float(await judge_result)

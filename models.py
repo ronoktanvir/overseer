@@ -11,7 +11,7 @@ class OverseerAction(Action):
     prediction: str = Field(..., description="Predicted hidden strategy for the current target player.")
     target_player: str | None = Field(
         default=None,
-        description="Optional target power. If provided, it must match the current observation.",
+        description="Optional target power. The environment always scores against the current observation target.",
     )
 
 
