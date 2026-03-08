@@ -1,16 +1,13 @@
----
-title: Overseer OpenEnv
-emoji: "♟️"
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 8000
-pinned: false
----
-
 # Diplomacy Overseer
 
 OpenEnv environment and training harness for an overseer model that infers hidden Diplomacy strategy from public state, order history, communication metadata, and public messages.
+
+This repository contains:
+
+- an OpenEnv-compatible Diplomacy overseer environment
+- local tooling for repairing serialized game data
+- training and evaluation scripts for SFT and GRPO
+- a lightweight demo dashboard for inspecting overseer predictions
 
 Tracks:
 - Statement 1: Multi-Agent Interactions

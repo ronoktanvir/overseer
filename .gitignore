@@ -11,6 +11,5 @@ __pycache__/
 openenv_overseer.egg-info/
 
 outputs/*
-!outputs/.gitkeep
 
 game_data*.json
