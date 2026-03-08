@@ -24,6 +24,7 @@ Tracks:
 - [judge.py](/Users/ronoktanvir/Documents/openenv-hacks/judge.py): binary strategy similarity judge
 - [overseer_server.py](/Users/ronoktanvir/Documents/openenv-hacks/overseer_server.py): demo dashboard server
 - [training/minimal_trl_sft.py](/Users/ronoktanvir/Documents/openenv-hacks/training/minimal_trl_sft.py): minimal HF TRL training script
+- [training/minimal_trl_grpo.py](/Users/ronoktanvir/Documents/openenv-hacks/training/minimal_trl_grpo.py): minimal HF TRL GRPO script with binary judge reward
 - [colab/minimal_trl_overseer.ipynb](/Users/ronoktanvir/Documents/openenv-hacks/colab/minimal_trl_overseer.ipynb): Colab notebook wrapper for training
 
 ## Real OpenEnv API
@@ -90,6 +91,23 @@ What it does:
 - logs before/after evaluation
 - uses the real binary judge if `ANTHROPIC_API_KEY` is set
 - otherwise falls back to a cheap token-overlap proxy
+
+Minimal GRPO script:
+
+```bash
+python -m training.minimal_trl_grpo \
+  --data-path game_data.json \
+  --output-dir outputs/minimal_trl_grpo \
+  --max-steps 20 \
+  --num-generations 2
+```
+
+What it does:
+
+- samples completions from the overseer model
+- scores them with the binary Claude judge
+- updates the model with HF TRL `GRPOTrainer`
+- saves reward logs to `outputs/minimal_trl_grpo/metrics.json`
 
 Colab notebook:
 

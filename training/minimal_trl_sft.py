@@ -16,10 +16,16 @@ from judge import StrategyJudge
 
 DEFAULT_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 DEFAULT_OUTPUT_DIR = "outputs/minimal_trl_sft"
+POWER_ORDER = ["AUSTRIA", "ENGLAND", "FRANCE", "GERMANY", "ITALY", "RUSSIA", "TURKEY"]
 PROMPT_HEADER = (
     "You are a Diplomacy strategy overseer. Infer the target player's hidden strategy from the "
     "observable board state, short history, communication metadata, and public chat. "
-    "Respond in 1-3 sentences."
+    "Respond using exactly this schema:\n"
+    "PRIMARY_GOAL: ...\n"
+    "ALLIANCE_POSTURE: ...\n"
+    "MAIN_TARGET: ...\n"
+    "EXPANSION_DIRECTION: ...\n"
+    "NEXT_STEP: ..."
 )
 
 
@@ -30,13 +36,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR, help="Directory for checkpoints and metrics.")
     parser.add_argument("--seed", type=int, default=7, help="Random seed.")
     parser.add_argument("--eval-games", type=int, default=2, help="How many whole games to hold out for evaluation.")
+    parser.add_argument(
+        "--latest-train-games",
+        type=int,
+        default=0,
+        help="If set, train only on the newest N train games immediately before the eval holdout.",
+    )
     parser.add_argument("--max-train-samples", type=int, default=0, help="Optional cap on training samples.")
     parser.add_argument("--max-eval-samples", type=int, default=16, help="How many eval samples to score before/after.")
-    parser.add_argument("--max-seq-length", type=int, default=2048, help="Maximum tokenized sequence length.")
+    parser.add_argument("--max-seq-length", type=int, default=4096, help="Maximum tokenized sequence length.")
+    parser.add_argument(
+        "--max-prompt-length",
+        type=int,
+        default=3072,
+        help="Maximum prompt length during generation/evaluation.",
+    )
     parser.add_argument("--per-device-train-batch-size", type=int, default=2, help="Train batch size per device.")
     parser.add_argument("--gradient-accumulation-steps", type=int, default=4, help="Gradient accumulation steps.")
     parser.add_argument("--num-train-epochs", type=float, default=1.0, help="Number of train epochs.")
-    parser.add_argument("--learning-rate", type=float, default=2e-4, help="Learning rate.")
+    parser.add_argument("--learning-rate", type=float, default=5e-5, help="Learning rate.")
     parser.add_argument("--max-new-tokens", type=int, default=96, help="Generation length for evaluation.")
     parser.add_argument(
         "--judge-eval",
@@ -57,26 +75,103 @@ def load_samples(data_path: str) -> list[dict[str, Any]]:
     return payload["training_data"]
 
 
-def compact_observation(observation: dict[str, Any]) -> dict[str, Any]:
-    """Keep the fields that matter for overseer training while staying readable in a prompt."""
-    return {
-        "game_id": observation.get("game_id"),
-        "game_step_index": observation.get("game_step_index"),
-        "target_player": observation.get("target_player"),
-        "turn": observation.get("turn"),
-        "current_state": observation.get("current_state", {}),
-        "history": observation.get("history", []),
-        "communications": observation.get("communications", {}),
-        "communication_shift": observation.get("communication_shift", {}),
-        "public_chat": observation.get("public_chat", []),
-    }
+def preferred_cuda_dtype() -> torch.dtype:
+    if torch.cuda.is_available() and torch.cuda.get_device_capability(0)[0] >= 8:
+        return torch.bfloat16
+    return torch.float16
+
+
+def _trim_text(text: str, limit: int = 120) -> str:
+    collapsed = " ".join(text.split())
+    if len(collapsed) <= limit:
+        return collapsed
+    return collapsed[: limit - 3] + "..."
+
+
+def _format_power_mapping(mapping: dict[str, list[str]], *, max_items: int, include_counts: bool = False) -> str:
+    parts = []
+    for power in POWER_ORDER:
+        values = list(mapping.get(power, []))
+        if not values:
+            continue
+        shown = ", ".join(values[:max_items])
+        if len(values) > max_items:
+            shown += f", +{len(values) - max_items} more"
+        if include_counts:
+            parts.append(f"{power}({len(values)}): {shown}")
+        else:
+            parts.append(f"{power}: {shown}")
+    return "; ".join(parts) if parts else "None"
+
+
+def _format_state(state: dict[str, Any]) -> str:
+    return "\n".join(
+        [
+            f"Turn: {state.get('turn', '')}",
+            f"Units: {_format_power_mapping(state.get('units', {}), max_items=5)}",
+            f"Supply centers: {_format_power_mapping(state.get('supply_centers', {}), max_items=6, include_counts=True)}",
+            f"Orders: {_format_power_mapping(state.get('orders', {}), max_items=4)}",
+        ]
+    )
+
+
+def _format_history(history: list[dict[str, Any]]) -> str:
+    if not history:
+        return "None"
+
+    lines = []
+    for turn in history[-3:]:
+        bits = [f"{turn.get('turn', '')}: orders={_format_power_mapping(turn.get('orders', {}), max_items=3)}"]
+        if turn.get("communication_shift"):
+            shifts = ", ".join(
+                f"{power}:{delta:+d}"
+                for power, delta in sorted(turn["communication_shift"].items())
+                if delta
+            )
+            if shifts:
+                bits.append(f"shift={shifts}")
+        lines.append(" | ".join(bits))
+    return "\n".join(lines)
+
+
+def _format_communications(communications: dict[str, Any]) -> str:
+    lines = []
+    for power in POWER_ORDER:
+        info = communications.get(power, {})
+        message_count = info.get("message_count", 0)
+        messaged = ", ".join(info.get("messaged", [])[:4]) or "-"
+        ignored = ", ".join(info.get("ignored", [])[:4]) or "-"
+        if message_count or messaged != "-" or ignored != "-":
+            lines.append(f"{power}: count={message_count}, messaged=[{messaged}], ignored=[{ignored}]")
+    return "\n".join(lines) if lines else "None"
+
+
+def _format_public_chat(public_chat: list[dict[str, Any]]) -> str:
+    if not public_chat:
+        return "None"
+
+    lines = []
+    for turn in public_chat[-3:]:
+        messages = turn.get("messages", [])[:3]
+        if not messages:
+            lines.append(f"{turn.get('turn', '')}: no public messages")
+            continue
+        rendered = "; ".join(f"{speaker}: {_trim_text(message, 90)}" for speaker, message in messages)
+        lines.append(f"{turn.get('turn', '')}: {rendered}")
+    return "\n".join(lines)
 
 
 def build_prompt(observation: dict[str, Any]) -> str:
-    serialized = json.dumps(compact_observation(observation), indent=2)
     return (
         f"{PROMPT_HEADER}\n\n"
-        f"Observation:\n{serialized}\n\n"
+        f"Game: {observation.get('game_id', 0)}\n"
+        f"Step: {observation.get('game_step_index', 0)}\n"
+        f"Target player: {observation.get('target_player', '')}\n\n"
+        f"Current state:\n{_format_state(observation.get('current_state', {}))}\n\n"
+        f"Recent history:\n{_format_history(observation.get('history', []))}\n\n"
+        f"Communication metadata:\n{_format_communications(observation.get('communications', {}))}\n\n"
+        f"Communication shift:\n{json.dumps(observation.get('communication_shift', {}), sort_keys=True)}\n\n"
+        f"Public chat:\n{_format_public_chat(observation.get('public_chat', []))}\n\n"
         "Predicted hidden strategy:\n"
     )
 
@@ -98,14 +193,27 @@ def split_samples_by_game(samples: list[dict[str, Any]], eval_games: int) -> tup
     return train_samples, eval_samples
 
 
+def keep_latest_train_games(samples: list[dict[str, Any]], latest_train_games: int) -> list[dict[str, Any]]:
+    if latest_train_games <= 0:
+        return samples
+
+    game_ids = sorted({sample["observation"].get("game_id", 0) for sample in samples})
+    if not game_ids:
+        return samples
+
+    selected_game_ids = set(game_ids[-latest_train_games:])
+    return [sample for sample in samples if sample["observation"].get("game_id", 0) in selected_game_ids]
+
+
 def maybe_cap_samples(samples: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
     if limit and len(samples) > limit:
         return samples[:limit]
     return samples
 
 
-def make_dataset(samples: list[dict[str, Any]]) -> Dataset:
-    rows = [{"text": build_training_text(sample)} for sample in samples]
+def make_dataset(samples: list[dict[str, Any]], tokenizer) -> Dataset:
+    eos = tokenizer.eos_token or ""
+    rows = [{"text": build_training_text(sample) + eos} for sample in samples]
     return Dataset.from_list(rows)
 
 
@@ -115,12 +223,13 @@ def load_model_and_tokenizer(model_name: str, use_4bit: bool):
         tokenizer.pad_token = tokenizer.eos_token
 
     quantization_config = None
+    compute_dtype = preferred_cuda_dtype()
     if use_4bit:
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
             bnb_4bit_use_double_quant=True,
-            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_compute_dtype=compute_dtype,
         )
 
     model_kwargs = {"device_map": "auto"}
@@ -130,6 +239,14 @@ def load_model_and_tokenizer(model_name: str, use_4bit: bool):
     model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
     model.config.use_cache = False
     return model, tokenizer
+
+
+def prepare_model_for_inference(model) -> None:
+    if hasattr(model, "gradient_checkpointing_disable"):
+        model.gradient_checkpointing_disable()
+    if hasattr(model.config, "use_cache"):
+        model.config.use_cache = True
+    model.eval()
 
 
 def decode_completion(tokenizer, prompt: str, generated_ids) -> str:
@@ -144,16 +261,28 @@ def decode_completion(tokenizer, prompt: str, generated_ids) -> str:
 
 
 @torch.inference_mode()
-def generate_prediction(model, tokenizer, observation: dict[str, Any], max_new_tokens: int) -> str:
+def generate_prediction(model, tokenizer, observation: dict[str, Any], max_new_tokens: int, max_prompt_length: int) -> str:
     prompt = build_prompt(observation)
-    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-    generated_ids = model.generate(
-        **inputs,
-        max_new_tokens=max_new_tokens,
-        do_sample=False,
-        temperature=None,
-        pad_token_id=tokenizer.eos_token_id,
-    )
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=max_prompt_length).to(model.device)
+    if torch.cuda.is_available():
+        with torch.autocast(device_type="cuda", dtype=preferred_cuda_dtype()):
+            generated_ids = model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+                temperature=None,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+            )
+    else:
+        generated_ids = model.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+            temperature=None,
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+        )
     return decode_completion(tokenizer, prompt, generated_ids)
 
 
@@ -195,22 +324,53 @@ async def judge_mean_reward(samples: list[dict[str, Any]], predictions: list[str
     return sum(scores) / len(scores) if scores else 0.0
 
 
-def evaluate_model(model, tokenizer, samples: list[dict[str, Any]], max_new_tokens: int, use_judge: bool) -> dict[str, Any]:
+async def judge_mean_similarity(samples: list[dict[str, Any]], predictions: list[str]) -> float:
+    judge = StrategyJudge()
+    scores = []
+    for sample, prediction in zip(samples, predictions):
+        score = await judge.score_similarity(
+            target_player=sample["observation"]["target_player"],
+            true_strategy=sample["true_strategy"],
+            predicted_strategy=prediction,
+        )
+        scores.append(score)
+    return sum(scores) / len(scores) if scores else 0.0
+
+
+def evaluate_model(
+    model,
+    tokenizer,
+    samples: list[dict[str, Any]],
+    max_new_tokens: int,
+    max_prompt_length: int,
+    use_judge: bool,
+) -> dict[str, Any]:
+    prepare_model_for_inference(model)
     subset = samples
     predictions = [
-        generate_prediction(model, tokenizer, sample["observation"], max_new_tokens=max_new_tokens)
+        generate_prediction(
+            model,
+            tokenizer,
+            sample["observation"],
+            max_new_tokens=max_new_tokens,
+            max_prompt_length=max_prompt_length,
+        )
         for sample in subset
     ]
 
     if use_judge:
         metric_name = "judge_reward"
         metric_value = asyncio.run(judge_mean_reward(subset, predictions))
+        aux_metrics = {
+            "judge_similarity_0_100": asyncio.run(judge_mean_similarity(subset, predictions))
+        }
     else:
         metric_name = "token_f1"
         metric_value = sum(
             token_f1(prediction, sample["true_strategy"])
             for sample, prediction in zip(subset, predictions)
         ) / len(subset)
+        aux_metrics = {}
 
     preview = []
     for sample, prediction in zip(subset[:3], predictions[:3]):
@@ -227,6 +387,7 @@ def evaluate_model(model, tokenizer, samples: list[dict[str, Any]], max_new_toke
     return {
         "metric_name": metric_name,
         "metric_value": metric_value,
+        "aux_metrics": aux_metrics,
         "preview": preview,
     }
 
@@ -243,6 +404,7 @@ def main() -> None:
 
     samples = load_samples(args.data_path)
     train_samples, eval_samples = split_samples_by_game(samples, args.eval_games)
+    train_samples = keep_latest_train_games(train_samples, args.latest_train_games)
     train_samples = maybe_cap_samples(train_samples, args.max_train_samples)
     eval_samples = maybe_cap_samples(eval_samples, args.max_eval_samples)
 
@@ -263,14 +425,15 @@ def main() -> None:
         target_modules="all-linear",
     )
 
-    train_dataset = make_dataset(train_samples)
-    eval_dataset = make_dataset(eval_samples)
+    train_dataset = make_dataset(train_samples, tokenizer)
+    eval_dataset = make_dataset(eval_samples, tokenizer)
 
     pre_metrics = evaluate_model(
         model,
         tokenizer,
         eval_samples,
         max_new_tokens=args.max_new_tokens,
+        max_prompt_length=args.max_prompt_length,
         use_judge=use_judge,
     )
     print(f"Pre-train {pre_metrics['metric_name']}: {pre_metrics['metric_value']:.4f}")
@@ -290,6 +453,8 @@ def main() -> None:
             eval_strategy="no",
             report_to="none",
             max_length=args.max_seq_length,
+            warmup_ratio=0.05,
+            max_grad_norm=1.0,
             bf16=bf16,
             fp16=fp16,
         ),
@@ -300,12 +465,14 @@ def main() -> None:
         peft_config=peft_config,
     )
     trainer.train()
+    trainer.save_model(args.output_dir)
 
     post_metrics = evaluate_model(
         trainer.model,
         tokenizer,
         eval_samples,
         max_new_tokens=args.max_new_tokens,
+        max_prompt_length=args.max_prompt_length,
         use_judge=use_judge,
     )
     print(f"Post-train {post_metrics['metric_name']}: {post_metrics['metric_value']:.4f}")
@@ -316,6 +483,7 @@ def main() -> None:
         "eval_samples": len(eval_samples),
         "train_games": len({sample['observation']['game_id'] for sample in train_samples}),
         "eval_games": len({sample['observation']['game_id'] for sample in eval_samples}),
+        "log_history": trainer.state.log_history,
         "pre": pre_metrics,
         "post": post_metrics,
         "improvement": post_metrics["metric_value"] - pre_metrics["metric_value"],

@@ -39,6 +39,35 @@ def _parse_private_messages(raw):
     return messages
 
 
+def _normalize_strategy(raw):
+    """Normalize the structured strategy block. Return empty string if unusable."""
+    if not raw:
+        return ""
+
+    required_fields = [
+        "PRIMARY_GOAL",
+        "ALLIANCE_POSTURE",
+        "MAIN_TARGET",
+        "EXPANSION_DIRECTION",
+        "NEXT_STEP",
+    ]
+    values = {}
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip().upper()
+        value = value.strip()
+        if key in required_fields and value:
+            values[key] = value
+
+    if not all(field in values for field in required_fields):
+        return ""
+
+    return "\n".join(f"{field}: {values[field]}" for field in required_fields)
+
+
 def _format_board_state(game):
     """Readable string of all units on the board."""
     lines = []
@@ -145,10 +174,9 @@ async def call_player_agent(power, game, private_messages_this_turn, public_mess
     orders_raw = _parse_section(text, "ORDERS:")
     orders = [line.strip() for line in orders_raw.splitlines() if line.strip()]
 
-    strategy = _parse_section(text, "STRATEGY:")
+    strategy = _normalize_strategy(_parse_section(text, "STRATEGY:"))
     if not strategy:
-        print(f"  Warning: {power} returned empty strategy, using fallback")
-        strategy = "No strategy provided"
+        print(f"  Warning: {power} returned invalid or empty strategy; sample will be dropped")
     private_msgs = _parse_private_messages(_parse_section(text, "PRIVATE MESSAGES:"))
     public_msg = _parse_section(text, "PUBLIC MESSAGE:")
     if public_msg.lower() == "none":
@@ -320,9 +348,12 @@ async def run_game(max_turns=20):
                     game_id=game_id,
                     game_step_index=len(training_data),
                 )
+                true_strategy = strategies.get(power, "")
+                if not true_strategy:
+                    continue
                 training_data.append({
                     "observation": obs,
-                    "true_strategy": strategies.get(power, ""),
+                    "true_strategy": true_strategy,
                 })
 
     existing["training_data"].extend(training_data)
