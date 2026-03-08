@@ -270,16 +270,20 @@ async def run_game(max_turns=20):
                     "true_strategy": strategies.get(power, ""),
                 })
 
-    game_data = {
-        "training_data": training_data,
-        "public_chat_log": public_chat_log,
-        "history": history,
-    }
-    with open("game_data.json", "w") as f:
-        json.dump(game_data, f, indent=2, default=str)
+    existing = {"training_data": [], "public_chat_log": [], "history": []}
+    if os.path.exists("game_data.json"):
+        with open("game_data.json", "r") as f:
+            existing = json.load(f)
 
-    print(f"Saved {len(training_data)} training samples to game_data.json")
-    return game_data
+    existing["training_data"].extend(training_data)
+    existing["public_chat_log"].extend(public_chat_log)
+    existing["history"].extend(history)
+
+    with open("game_data.json", "w") as f:
+        json.dump(existing, f, indent=2, default=str)
+
+    print(f"Saved {len(training_data)} new samples ({len(existing['training_data'])} total) to game_data.json")
+    return existing
 
 
 if __name__ == "__main__":
