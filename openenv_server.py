@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 import anthropic
 from fastapi import FastAPI
@@ -25,13 +26,25 @@ async def _judge(power, true_strategy, predicted_strategy):
     )
     response = await judge_client.messages.create(
         model=JUDGE_MODEL,
-        max_tokens=4,
+        max_tokens=40,
         temperature=0,
         messages=[{"role": "user", "content": prompt}],
     )
     text = response.content[0].text.strip()
+<<<<<<< HEAD
     if "SCORE: 1" in text:
         return 1
+=======
+    score_match = re.search(r"SCORE:\s*([01])\b", text, re.IGNORECASE)
+    if score_match:
+        return int(score_match.group(1))
+
+    # Fall back to a bare 0/1 if the model ignores formatting.
+    if text in {"0", "1"}:
+        return int(text)
+
+    # Fail closed if the model returns an unexpected format.
+>>>>>>> cb6df70 (Unify demo UI and judge scoring flow)
     return 0
 
 
