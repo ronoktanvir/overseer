@@ -523,7 +523,7 @@
 <script>
     // Base URL for the Overseer backend. You can override this by defining
     // window.OVERSEER_API_BASE before this script runs.
-    const API_BASE = (window.OVERSEER_API_BASE || 'http://localhost:8000').replace(/\/+$/, '');
+    const API_BASE = (window.OVERSEER_API_BASE || window.location.origin).replace(/\/+$/, '');
 
     const els = {
         alignmentIndicator: document.getElementById('alignment-indicator'),
@@ -553,14 +553,36 @@
     let isPaused = false;
     let lastPayload = null;
 
+    function inferThreatLevel(country) {
+        if (!country) {
+            return 'LOW';
+        }
+        if ((country.supply_center_delta || 0) < 0 || (country.unit_delta || 0) < 0) {
+            return 'HIGH';
+        }
+        if ((country.supply_center_delta || 0) > 0 || (country.unit_delta || 0) > 0) {
+            return 'LOW';
+        }
+        return 'MED';
+    }
+
     function renderState(payload) {
         lastPayload = payload;
         const reward = !!payload.reward;
         const history = Array.isArray(payload.reward_history) ? payload.reward_history : [];
-        const predictions = payload.predictions || {};
-        const supplyCenters = payload.supply_centers || {};
-        const threatLevels = payload.threat_levels || {};
-        const deceptionFlags = payload.deception_flags || {};
+        const countries = Array.isArray(payload.countries) ? payload.countries : [];
+        const predictions = payload.predictions || Object.fromEntries(
+            countries.map((country) => [country.power, country.predicted_strategy_short || country.predicted_strategy || '—'])
+        );
+        const supplyCenters = payload.supply_centers || Object.fromEntries(
+            countries.map((country) => [country.power, country.supply_center_count])
+        );
+        const threatLevels = payload.threat_levels || Object.fromEntries(
+            countries.map((country) => [country.power, inferThreatLevel(country)])
+        );
+        const deceptionFlags = payload.deception_flags || Object.fromEntries(
+            countries.map((country) => [country.power, country.judge_correct === false])
+        );
         const lastTurn = payload.last_turn || null;
 
         if (payload.turn && els.turnPill) {
@@ -691,6 +713,15 @@
                 const isWrong = line.includes('✗');
                 return `<div style="margin-bottom:2px;color:${isWrong ? '#fecaca' : '#bbf7d0'};">${line.replace('✓', '<span style="color:#4cff91">✓</span>').replace('✗', '<span style="color:#ff4c4c">✗</span>')}</div>`;
             }).join('');
+        } else if (countries.length && els.lastTurnPanel && els.lastTurnBody) {
+            els.lastTurnPanel.style.display = 'block';
+            els.lastTurnTitle.textContent = `Current turn prediction vs hidden strategy (${payload.turn || '—'})`;
+            els.lastTurnBody.innerHTML = countries.map((country) => {
+                const ok = !!country.judge_correct;
+                const color = ok ? '#bbf7d0' : '#fecaca';
+                const mark = ok ? '<span style="color:#4cff91">✓</span>' : '<span style="color:#ff4c4c">✗</span>';
+                return `<div style="margin-bottom:6px;color:${color};"><strong>${country.power}</strong>: ${country.predicted_strategy_short || country.predicted_strategy || '—'}<br><span style="color:#94a3b8;">truth:</span> ${country.actual_strategy_short || country.actual_strategy || '—'} ${mark}</div>`;
+            }).join('');
         }
 
         // Status
@@ -773,4 +804,3 @@
 </script>
 </body>
 </html>
-

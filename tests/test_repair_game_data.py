@@ -113,6 +113,24 @@ class RepairGameDataTests(unittest.TestCase):
         self.assertEqual(stats["history_samples_backfilled"], 3)
         self.assertEqual(stats["history_turns_backfilled"], 4)
 
+    def test_assigns_game_ids_and_game_step_indices(self):
+        data = {
+            "training_data": [
+                sample("S1902M", "AUSTRIA", [], {"AUSTRIA": {"messaged": [], "ignored": [], "message_count": 0}}),
+                sample("F1902M", "ENGLAND", [], {"ENGLAND": {"messaged": [], "ignored": [], "message_count": 0}}),
+                sample("S1901M", "FRANCE", [], {"FRANCE": {"messaged": [], "ignored": [], "message_count": 0}}),
+            ]
+        }
+
+        repaired, stats = repair_game_data(data, public_chat_window=5)
+
+        observations = [sample["observation"] for sample in repaired["training_data"]]
+        self.assertEqual(
+            [(obs["game_id"], obs["game_step_index"]) for obs in observations],
+            [(0, 0), (0, 1), (1, 0)],
+        )
+        self.assertEqual(stats["game_samples_annotated"], 3)
+
 
 if __name__ == "__main__":
     unittest.main()

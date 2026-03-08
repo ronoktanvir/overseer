@@ -43,6 +43,7 @@ class OverseerEnvironment(Environment[OverseerAction, OverseerObservation, Overs
             index=0,
             total_samples=len(self._samples),
             current_target_player=None,
+            current_game_id=0,
             data_path=data_path,
         )
 
@@ -80,11 +81,13 @@ class OverseerEnvironment(Environment[OverseerAction, OverseerObservation, Overs
             index=0,
             total_samples=len(self._samples),
             current_target_player=None,
+            current_game_id=0,
             data_path=self.data_path,
         )
         sample = self._current_sample()
         observation = self._sample_to_observation(sample["observation"])
         self._state.current_target_player = observation.target_player
+        self._state.current_game_id = observation.game_id
         return observation
 
     async def step_async(
@@ -119,6 +122,7 @@ class OverseerEnvironment(Environment[OverseerAction, OverseerObservation, Overs
         next_sample = self._samples[self._state.index]
         next_observation = self._sample_to_observation(next_sample["observation"], reward=reward, done=False)
         self._state.current_target_player = next_observation.target_player
+        self._state.current_game_id = next_observation.game_id
         return next_observation
 
     def step(

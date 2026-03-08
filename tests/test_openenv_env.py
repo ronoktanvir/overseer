@@ -4,11 +4,13 @@ from models import OverseerAction
 from server.overseer_environment import OverseerEnvironment
 
 
-def make_sample(target_player: str, turn: str, true_strategy: str):
+def make_sample(target_player: str, turn: str, true_strategy: str, game_id: int = 0, game_step_index: int = 0):
     return {
         "observation": {
             "target_player": target_player,
             "turn": turn,
+            "game_id": game_id,
+            "game_step_index": game_step_index,
             "current_state": {
                 "turn": turn,
                 "units": {target_player: ["A PAR"]},
@@ -37,12 +39,16 @@ class OverseerEnvironmentTests(unittest.IsolatedAsyncioTestCase):
 
         reset_obs = env.reset()
         self.assertEqual(reset_obs.target_player, "FRANCE")
+        self.assertEqual(reset_obs.game_id, 0)
+        self.assertEqual(reset_obs.game_step_index, 0)
         self.assertEqual(env.state.index, 0)
+        self.assertEqual(env.state.current_game_id, 0)
 
         next_obs = await env.step_async(
             OverseerAction(target_player="FRANCE", prediction="France wants Belgium.")
         )
         self.assertEqual(next_obs.target_player, "GERMANY")
+        self.assertEqual(next_obs.game_id, 0)
         self.assertEqual(next_obs.reward, 1.0)
         self.assertFalse(next_obs.done)
         self.assertEqual(env.state.index, 1)

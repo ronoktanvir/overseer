@@ -78,11 +78,21 @@ class BuildObservationTests(unittest.TestCase):
             "prev": {},
         }
 
-        observation = build_observation("AUSTRIA", current_state, [], comm_tracker, [])
+        observation = build_observation(
+            "AUSTRIA",
+            current_state,
+            [],
+            comm_tracker,
+            [],
+            game_id=3,
+            game_step_index=11,
+        )
 
         self.assertIn("AUSTRIA", observation["communications"])
         self.assertEqual(observation["communications"]["AUSTRIA"]["messaged"], ["ITALY"])
         self.assertEqual(observation["current_state"]["turn"], "S1902M")
+        self.assertEqual(observation["game_id"], 3)
+        self.assertEqual(observation["game_step_index"], 11)
 
     def test_snapshots_public_chat(self):
         current_state = {
@@ -94,11 +104,21 @@ class BuildObservationTests(unittest.TestCase):
         }
         public_chat = [{"turn": "S1902M", "messages": [["AUSTRIA", "hello"]]}]
 
-        observation = build_observation("AUSTRIA", current_state, [], {"curr": {}, "prev": {}}, public_chat)
+        observation = build_observation(
+            "AUSTRIA",
+            current_state,
+            [],
+            {"curr": {}, "prev": {}},
+            public_chat,
+            game_id=1,
+            game_step_index=2,
+        )
         public_chat.append({"turn": "F1902M", "messages": [["ENGLAND", "future"]]})
 
         self.assertEqual(len(observation["public_chat"]), 1)
         self.assertEqual(observation["public_chat"][0]["turn"], "S1902M")
+        self.assertEqual(observation["game_id"], 1)
+        self.assertEqual(observation["game_step_index"], 2)
 
     def test_history_preserves_communication_metadata(self):
         history_turn = {

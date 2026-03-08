@@ -12,6 +12,8 @@ from observation import POWERS, build_current_state, build_observation
 MODEL = "claude-haiku-4-5-20251001"
 client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 _connection_semaphore = asyncio.Semaphore(7)
+SEASON_ORDER = {"S": 0, "F": 1, "W": 2}
+PHASE_TYPE_ORDER = {"M": 0, "R": 1, "A": 2}
 
 
 def _parse_section(text, header):
@@ -206,7 +208,50 @@ def _serializable_comm_tracker(comm_tracker):
     return out
 
 
+def _phase_sort_key(turn):
+    """Convert a Diplomacy phase like S1904R into a sortable key."""
+    if not turn or len(turn) < 6:
+        return None
+    return (
+        int(turn[1:5]),
+        SEASON_ORDER.get(turn[0], 99),
+        PHASE_TYPE_ORDER.get(turn[-1], 99),
+    )
+
+
+def _next_game_id(samples):
+    """Compute the next game identifier from existing serialized samples."""
+    if not samples:
+        return 0
+
+    explicit_ids = [
+        sample.get("observation", {}).get("game_id")
+        for sample in samples
+        if sample.get("observation", {}).get("game_id") is not None
+    ]
+    if explicit_ids:
+        return max(explicit_ids) + 1
+
+    game_count = 1
+    previous_turn = samples[0].get("observation", {}).get("turn")
+    previous_key = _phase_sort_key(previous_turn)
+    for sample in samples[1:]:
+        turn = sample.get("observation", {}).get("turn")
+        current_key = _phase_sort_key(turn)
+        if previous_key is not None and current_key is not None and current_key < previous_key:
+            game_count += 1
+        previous_key = current_key
+
+    return game_count
+
+
 async def run_game(max_turns=20):
+    existing = {"training_data": [], "public_chat_log": [], "history": []}
+    if os.path.exists("game_data.json"):
+        with open("game_data.json", "r") as f:
+            existing = json.load(f)
+
+    game_id = _next_game_id(existing.get("training_data", []))
     game = Game()
     history = []
     training_data = []
@@ -272,16 +317,13 @@ async def run_game(max_turns=20):
                     power, current_state, history,
                     serializable_comm_tracker,
                     public_chat_log,
+                    game_id=game_id,
+                    game_step_index=len(training_data),
                 )
                 training_data.append({
                     "observation": obs,
                     "true_strategy": strategies.get(power, ""),
                 })
-
-    existing = {"training_data": [], "public_chat_log": [], "history": []}
-    if os.path.exists("game_data.json"):
-        with open("game_data.json", "r") as f:
-            existing = json.load(f)
 
     existing["training_data"].extend(training_data)
     existing["public_chat_log"].extend(public_chat_log)

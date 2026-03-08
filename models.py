@@ -20,6 +20,12 @@ class OverseerObservation(Observation):
 
     target_player: str = Field(default="", description="Power whose hidden strategy should be predicted.")
     turn: str = Field(default="", description="Current game phase.")
+    game_id: int = Field(default=0, ge=0, description="Zero-based identifier of the source game.")
+    game_step_index: int = Field(
+        default=0,
+        ge=0,
+        description="Zero-based sample index within the source game.",
+    )
     current_state: dict[str, Any] = Field(default_factory=dict, description="Current board snapshot.")
     history: list[dict[str, Any]] = Field(default_factory=list, description="Last few observed turns.")
     communications: dict[str, Any] = Field(
@@ -45,4 +51,5 @@ class OverseerState(State):
         default=None,
         description="Target player for the current sample.",
     )
+    current_game_id: int = Field(default=0, ge=0, description="Game identifier for the current sample.")
     data_path: str = Field(default="game_data.json", description="Dataset backing this environment.")

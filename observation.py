@@ -71,7 +71,15 @@ def build_current_state(game, phase=None, submitted_orders=None, comm_tracker=No
     }
 
 
-def build_observation(target_player, current_state, history, comm_tracker, public_chat):
+def build_observation(
+    target_player,
+    current_state,
+    history,
+    comm_tracker,
+    public_chat,
+    game_id=0,
+    game_step_index=0,
+):
     """Assemble the full observation dict for the overseer."""
     communication = current_state.get("communications") or _snapshot_communications(comm_tracker)
     communication_shift = current_state.get("communication_shift") or _compute_communication_shift(comm_tracker)
@@ -79,6 +87,8 @@ def build_observation(target_player, current_state, history, comm_tracker, publi
     return {
         "target_player": target_player,
         "turn": current_state["turn"],
+        "game_id": game_id,
+        "game_step_index": game_step_index,
         "current_state": {
             "turn": current_state["turn"],
             "units": current_state["units"],

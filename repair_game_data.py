@@ -151,6 +151,27 @@ def backfill_history_communications(game_block):
     return repaired_samples, repaired_turns
 
 
+def assign_game_metadata(samples):
+    """Attach stable per-game identifiers to every serialized observation."""
+    annotated_samples = 0
+    game_id = 0
+    for game_block in contiguous_game_blocks(samples):
+        for game_step_index, sample in enumerate(game_block):
+            observation = sample.setdefault("observation", {})
+            changed = False
+            if observation.get("game_id") != game_id:
+                observation["game_id"] = game_id
+                changed = True
+            if observation.get("game_step_index") != game_step_index:
+                observation["game_step_index"] = game_step_index
+                changed = True
+            if changed:
+                annotated_samples += 1
+        game_id += 1
+
+    return annotated_samples
+
+
 def repair_game_data(data, public_chat_window=None):
     """Repair offline training data without regenerating games."""
     samples = data.get("training_data", [])
@@ -162,6 +183,7 @@ def repair_game_data(data, public_chat_window=None):
         "current_state_turn_added": 0,
         "history_samples_backfilled": 0,
         "history_turns_backfilled": 0,
+        "game_samples_annotated": 0,
         "unresolved_target_communications": [],
     }
 
@@ -183,6 +205,8 @@ def repair_game_data(data, public_chat_window=None):
         repaired_samples, repaired_turns = backfill_history_communications(game_block)
         stats["history_samples_backfilled"] += repaired_samples
         stats["history_turns_backfilled"] += repaired_turns
+
+    stats["game_samples_annotated"] = assign_game_metadata(samples)
 
     return data, stats
 
@@ -234,6 +258,7 @@ def main():
     print(f"Added current_state.turn in {stats['current_state_turn_added']} samples")
     print(f"Backfilled history communications in {stats['history_samples_backfilled']} samples")
     print(f"Filled {stats['history_turns_backfilled']} history turns with communication metadata")
+    print(f"Annotated {stats['game_samples_annotated']} samples with game metadata")
     if stats["unresolved_target_communications"]:
         print(f"Unresolved target communications: {len(stats['unresolved_target_communications'])}")
         for turn, target in stats["unresolved_target_communications"][:10]:
