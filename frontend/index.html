@@ -1,0 +1,776 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Overseer Monitor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root {
+            --bg: #050509;
+            --panel-bg: #0d0d15;
+            --accent: #7eb8f7;
+            --accent-soft: #1b3358;
+            --text: #e0e0e0;
+            --muted: #8b8b8b;
+            --danger: #ff4c4c;
+            --success: #4cff91;
+            --border: #26263a;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+            background: radial-gradient(circle at top, #14162b 0, #050509 55%, #000 100%);
+            color: var(--text);
+            display: flex;
+            align-items: stretch;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .shell {
+            width: 100%;
+            max-width: 1120px;
+            display: grid;
+            grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+            gap: 20px;
+        }
+
+        @media (max-width: 900px) {
+            body {
+                padding: 16px;
+            }
+            .shell {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        .panel {
+            background: linear-gradient(145deg, rgba(17, 17, 34, 0.96), rgba(8, 8, 16, 0.98));
+            border-radius: 18px;
+            border: 1px solid var(--border);
+            padding: 18px 20px 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .panel::before {
+            content: "";
+            position: absolute;
+            inset: -40%;
+            background:
+                radial-gradient(circle at 0 0, rgba(126, 184, 247, 0.16), transparent 60%),
+                radial-gradient(circle at 100% 100%, rgba(76, 255, 145, 0.1), transparent 55%);
+            opacity: 0.8;
+            mix-blend-mode: screen;
+            pointer-events: none;
+        }
+
+        .panel-content {
+            position: relative;
+        }
+
+        .heading-row {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .title {
+            font-size: 13px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .title span.glyph {
+            font-size: 15px;
+        }
+
+        .subtitle {
+            font-size: 11px;
+            color: var(--muted);
+        }
+
+        .pill {
+            border-radius: 999px;
+            border: 1px solid rgba(126, 184, 247, 0.4);
+            padding: 4px 10px;
+            font-size: 11px;
+            color: var(--accent);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: radial-gradient(circle at top left, rgba(126, 184, 247, 0.14), transparent 65%);
+        }
+
+        .pill-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: var(--accent);
+        }
+
+        .section-label {
+            font-size: 11px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .alignment {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+            gap: 10px;
+        }
+
+        .alignment-main {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .alignment-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            box-shadow: 0 0 18px currentColor;
+        }
+
+        .alignment-text-primary {
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+        }
+
+        .alignment-text-secondary {
+            font-size: 11px;
+            color: var(--muted);
+        }
+
+        .alignment-tag {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .turn-pill {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(126, 184, 247, 0.4);
+            color: var(--accent);
+            background: rgba(4, 10, 25, 0.85);
+        }
+
+        .history-strip {
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.45);
+            padding: 6px 9px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .history-bars {
+            display: flex;
+            gap: 2px;
+            flex: 1;
+        }
+
+        .history-bar {
+            flex: 1;
+            height: 12px;
+            border-radius: 999px;
+            background: linear-gradient(to top, rgba(139, 139, 139, 0.35), rgba(70, 70, 70, 0.15));
+            opacity: 0.4;
+        }
+
+        .history-bar.ok {
+            background: linear-gradient(to top, rgba(76, 255, 145, 0.9), rgba(76, 255, 145, 0.3));
+            box-shadow: 0 0 10px rgba(76, 255, 145, 0.7);
+            opacity: 1;
+        }
+
+        .history-bar.bad {
+            background: linear-gradient(to top, rgba(255, 76, 76, 0.92), rgba(255, 76, 76, 0.35));
+            box-shadow: 0 0 10px rgba(255, 76, 76, 0.7);
+            opacity: 1;
+        }
+
+        .history-meta {
+            font-size: 10px;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .predictions-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 600px) {
+            .predictions-grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        .prediction-card {
+            background: radial-gradient(circle at top left, rgba(126, 184, 247, 0.2), rgba(17, 17, 34, 0.95));
+            border-radius: 10px;
+            padding: 8px 9px;
+            border: 1px solid rgba(77, 103, 140, 0.8);
+            box-shadow:
+                0 0 18px rgba(16, 24, 40, 0.9),
+                0 0 0 1px rgba(3, 7, 18, 0.9) inset;
+        }
+
+        .prediction-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4px;
+            margin-bottom: 4px;
+        }
+
+        .prediction-power {
+            font-size: 11px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--accent);
+        }
+
+        .prediction-tag {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.11em;
+            padding: 2px 6px;
+            border-radius: 999px;
+            border: 1px solid rgba(126, 184, 247, 0.65);
+            color: var(--accent);
+            background: rgba(7, 16, 30, 0.9);
+        }
+
+        .prediction-body {
+            font-size: 12px;
+            color: #dde6ff;
+        }
+
+        .prediction-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 4px;
+            font-size: 10px;
+            color: var(--muted);
+        }
+
+        .sc-pill {
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .threat-bar {
+            flex: 1;
+            height: 6px;
+            border-radius: 999px;
+            margin-left: 6px;
+            overflow: hidden;
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        .threat-bar-inner {
+            height: 100%;
+            width: 33%;
+            border-radius: 999px;
+            transition: width 0.2s ease-out, background 0.2s ease-out;
+        }
+
+        .threat-low {
+            width: 33%;
+            background: linear-gradient(90deg, #22c55e, #4cff91);
+        }
+
+        .threat-med {
+            width: 66%;
+            background: linear-gradient(90deg, #eab308, #facc15);
+        }
+
+        .threat-high {
+            width: 100%;
+            background: linear-gradient(90deg, #ef4444, #ff4c4c);
+        }
+
+        .deception-flag {
+            margin-left: 4px;
+            color: #f97316;
+            font-size: 11px;
+        }
+
+        .controls-row {
+            margin: 10px 0 4px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: var(--muted);
+        }
+
+        .control-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 9px;
+            border-radius: 999px;
+            border: 1px solid rgba(126, 184, 247, 0.3);
+            background: rgba(4, 10, 25, 0.9);
+        }
+
+        .control-button {
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            background: rgba(255, 255, 255, 0.02);
+            color: var(--text);
+            padding: 4px 11px;
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        .control-button[aria-pressed="true"] {
+            background: rgba(76, 255, 145, 0.12);
+            border-color: rgba(76, 255, 145, 0.8);
+            color: var(--success);
+        }
+
+        .control-select {
+            background: transparent;
+            border: none;
+            color: var(--text);
+            font-size: 11px;
+            outline: none;
+        }
+
+        .status-line {
+            margin-top: 6px;
+            font-size: 11px;
+            color: var(--muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: #ffaa33;
+            box-shadow: 0 0 10px rgba(255, 170, 51, 0.7);
+        }
+
+        .status-dot.ok {
+            background: var(--success);
+            box-shadow: 0 0 10px rgba(76, 255, 145, 0.7);
+        }
+
+        .status-dot.error {
+            background: var(--danger);
+            box-shadow: 0 0 10px rgba(255, 76, 76, 0.7);
+        }
+
+        .error-text {
+            color: var(--danger);
+        }
+
+        .snapshot {
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            font-size: 11px;
+            color: var(--muted);
+        }
+
+        .snapshot-title {
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            margin-bottom: 4px;
+        }
+
+        .snapshot-body {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 11px;
+            color: #c7d2ff;
+            max-height: 130px;
+            overflow: auto;
+            padding-right: 4px;
+        }
+
+        .layout-notes {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 10px;
+            max-width: 360px;
+        }
+    </style>
+</head>
+<body>
+<div class="shell">
+    <section class="panel">
+        <div class="panel-content">
+            <div class="heading-row">
+                <div>
+                    <div class="title">
+                        <span class="glyph">⬡</span>
+                        <span>OVERSEER</span>
+                    </div>
+                    <div class="subtitle">
+                        Coalition monitor for live Diplomacy games.
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+                    <div class="pill">
+                        <span class="pill-dot"></span>
+                        <span>LIVE LINK</span>
+                    </div>
+                    <div class="turn-pill" id="turn-pill">Turn: —</div>
+                </div>
+            </div>
+
+            <div class="section-label">Coalition stability</div>
+            <div class="alignment" id="alignment">
+                <div class="alignment-main">
+                    <div class="alignment-indicator" id="alignment-indicator"></div>
+                    <div>
+                        <div class="alignment-text-primary" id="alignment-text-primary">Waiting…</div>
+                        <div class="alignment-text-secondary" id="alignment-text-secondary">No reward yet.</div>
+                    </div>
+                </div>
+                <div class="alignment-tag" id="alignment-tag">IDLE</div>
+            </div>
+
+            <div class="section-label">Recent rewards</div>
+            <div class="history-strip">
+                <div class="history-bars" id="reward-history"></div>
+                <div class="history-meta" id="history-meta">0 / 0 aligned</div>
+            </div>
+
+            <div class="section-label" style="margin-top: 10px;">Agent predictions</div>
+            <div class="predictions-grid" id="predictions"></div>
+
+            <div class="controls-row">
+                <button id="pause-toggle"
+                        class="control-button"
+                        type="button"
+                        aria-pressed="false">
+                    Pause stream
+                </button>
+                <div class="control-chip">
+                    <span>Refresh</span>
+                    <select id="interval-select" class="control-select">
+                        <option value="1000">1s</option>
+                        <option value="2000" selected>2s</option>
+                        <option value="5000">5s</option>
+                    </select>
+                </div>
+                <button id="snapshot-button"
+                        class="control-button"
+                        type="button">
+                    Snapshot current
+                </button>
+            </div>
+
+            <div class="status-line" id="status-line">
+                <div class="status-dot" id="status-dot"></div>
+                <span id="status-text">Connecting to Overseer backend…</span>
+            </div>
+
+            <div class="snapshot" id="snapshot-panel" style="display:none;">
+                <div class="snapshot-title">Snapshot</div>
+                <div class="snapshot-body" id="snapshot-body"></div>
+            </div>
+
+            <div class="snapshot" id="last-turn-panel" style="margin-top:16px;display:none;">
+                <div class="snapshot-title" id="last-turn-title">Last turn oversight vs reality</div>
+                <div class="snapshot-body" id="last-turn-body"></div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+    // Base URL for the Overseer backend. You can override this by defining
+    // window.OVERSEER_API_BASE before this script runs.
+    const API_BASE = (window.OVERSEER_API_BASE || 'http://localhost:8000').replace(/\/+$/, '');
+
+    const els = {
+        alignmentIndicator: document.getElementById('alignment-indicator'),
+        alignmentPrimary: document.getElementById('alignment-text-primary'),
+        alignmentSecondary: document.getElementById('alignment-text-secondary'),
+        alignmentTag: document.getElementById('alignment-tag'),
+        rewardHistory: document.getElementById('reward-history'),
+        historyMeta: document.getElementById('history-meta'),
+        predictions: document.getElementById('predictions'),
+        statusDot: document.getElementById('status-dot'),
+        statusText: document.getElementById('status-text'),
+        statusLine: document.getElementById('status-line'),
+        pauseToggle: document.getElementById('pause-toggle'),
+        intervalSelect: document.getElementById('interval-select'),
+        snapshotButton: document.getElementById('snapshot-button'),
+        snapshotPanel: document.getElementById('snapshot-panel'),
+        snapshotBody: document.getElementById('snapshot-body'),
+        turnPill: document.getElementById('turn-pill'),
+        lastTurnPanel: document.getElementById('last-turn-panel'),
+        lastTurnBody: document.getElementById('last-turn-body'),
+        lastTurnTitle: document.getElementById('last-turn-title')
+    };
+
+    let lastOkAt = null;
+    let pollTimer = null;
+    let currentIntervalMs = parseInt(els.intervalSelect.value, 10) || 2000;
+    let isPaused = false;
+    let lastPayload = null;
+
+    function renderState(payload) {
+        lastPayload = payload;
+        const reward = !!payload.reward;
+        const history = Array.isArray(payload.reward_history) ? payload.reward_history : [];
+        const predictions = payload.predictions || {};
+        const supplyCenters = payload.supply_centers || {};
+        const threatLevels = payload.threat_levels || {};
+        const deceptionFlags = payload.deception_flags || {};
+        const lastTurn = payload.last_turn || null;
+
+        if (payload.turn && els.turnPill) {
+            els.turnPill.textContent = 'Turn: ' + payload.turn;
+        }
+
+        // Alignment visual
+        els.alignmentIndicator.style.color = reward ? 'var(--success)' : 'var(--danger)';
+        els.alignmentPrimary.textContent = reward ? 'STABLE' : 'FRAGILE';
+        els.alignmentSecondary.textContent = history.length
+            ? `Latest signal: ${reward ? 'coalition holding' : 'coalition at risk'} · window=${history.length}`
+            : 'No stability history yet.';
+        els.alignmentTag.textContent = reward ? 'LIVE' : 'DRIFT';
+
+        // Reward history bars
+        els.rewardHistory.innerHTML = '';
+        if (!history.length) {
+            const emptyBar = document.createElement('div');
+            emptyBar.className = 'history-bar';
+            els.rewardHistory.appendChild(emptyBar);
+        } else {
+            history.forEach((r) => {
+                const bar = document.createElement('div');
+                bar.className = 'history-bar ' + (r ? 'ok' : 'bad');
+                els.rewardHistory.appendChild(bar);
+            });
+        }
+
+        const alignedCount = history.filter(Boolean).length;
+        els.historyMeta.textContent = `${alignedCount} / ${history.length || 0} stable`;
+
+        // Predictions
+        els.predictions.innerHTML = '';
+        const entries = Object.entries(predictions);
+        if (!entries.length) {
+            const p = document.createElement('p');
+            p.className = 'alignment-text-secondary';
+            p.textContent = 'Backend did not return any per‑power predictions.';
+            els.predictions.appendChild(p);
+        } else {
+            entries.forEach(([power, summary]) => {
+                const card = document.createElement('article');
+                card.className = 'prediction-card';
+
+                const header = document.createElement('div');
+                header.className = 'prediction-header';
+
+                const powerEl = document.createElement('div');
+                powerEl.className = 'prediction-power';
+                powerEl.textContent = power;
+
+                const tag = document.createElement('div');
+                tag.className = 'prediction-tag';
+                const threat = (threatLevels[power] || 'LOW').toUpperCase();
+                if (threat === 'HIGH') {
+                    tag.textContent = 'THREAT · HIGH';
+                } else if (threat === 'MED') {
+                    tag.textContent = 'THREAT · MED';
+                } else {
+                    tag.textContent = 'THREAT · LOW';
+                }
+
+                const headerLeft = document.createElement('div');
+                headerLeft.style.display = 'flex';
+                headerLeft.style.alignItems = 'center';
+
+                headerLeft.appendChild(powerEl);
+                if (deceptionFlags[power]) {
+                    const warn = document.createElement('span');
+                    warn.className = 'deception-flag';
+                    warn.textContent = '⚠︎';
+                    headerLeft.appendChild(warn);
+                }
+
+                header.appendChild(headerLeft);
+                header.appendChild(tag);
+
+                const body = document.createElement('div');
+                body.className = 'prediction-body';
+                body.textContent = summary;
+
+                const meta = document.createElement('div');
+                meta.className = 'prediction-meta';
+
+                const sc = document.createElement('div');
+                sc.className = 'sc-pill';
+                const scCount = supplyCenters[power];
+                sc.textContent = scCount ? `${scCount} SCs` : 'SCs: —';
+
+                const threatBar = document.createElement('div');
+                threatBar.className = 'threat-bar';
+                const inner = document.createElement('div');
+                inner.className = 'threat-bar-inner ' + (
+                    threat === 'HIGH' ? 'threat-high' :
+                        threat === 'MED' ? 'threat-med' : 'threat-low'
+                );
+                threatBar.appendChild(inner);
+
+                meta.appendChild(sc);
+                meta.appendChild(threatBar);
+
+                card.appendChild(header);
+                card.appendChild(body);
+                card.appendChild(meta);
+                els.predictions.appendChild(card);
+            });
+        }
+
+        // Last turn comparison: Oversight vs reality.
+        if (lastTurn && els.lastTurnPanel && els.lastTurnBody) {
+            els.lastTurnPanel.style.display = 'block';
+            els.lastTurnTitle.textContent = `Last turn oversight vs reality (${lastTurn.turn || '—'})`;
+            const rows = [];
+            const lp = lastTurn.predictions || {};
+            const la = lastTurn.actual_strategies || {};
+            const lc = lastTurn.correct || {};
+            Object.keys(lp).forEach((power) => {
+                const predicted = lp[power];
+                const actual = la[power] || '—';
+                const ok = !!lc[power];
+                const mark = ok ? '✓' : '✗';
+                const color = ok ? '#4cff91' : '#ff4c4c';
+                rows.push(
+                    `${power}: ${predicted}  →  ${actual}   ${mark}`
+                );
+            });
+            els.lastTurnBody.innerHTML = rows.map(line => {
+                const isWrong = line.includes('✗');
+                return `<div style="margin-bottom:2px;color:${isWrong ? '#fecaca' : '#bbf7d0'};">${line.replace('✓', '<span style="color:#4cff91">✓</span>').replace('✗', '<span style="color:#ff4c4c">✗</span>')}</div>`;
+            }).join('');
+        }
+
+        // Status
+        els.statusDot.classList.remove('error');
+        els.statusDot.classList.add('ok');
+        els.statusText.textContent = (isPaused ? 'Paused · last from ' : 'Streaming from ') + API_BASE + '/overseer_state';
+        els.statusLine.classList.remove('error-text');
+        lastOkAt = Date.now();
+    }
+
+    function renderError(err) {
+        if (isPaused) {
+            // If user intentionally paused, keep "ok" status style.
+            return;
+        }
+        els.statusDot.classList.remove('ok');
+        els.statusDot.classList.add('error');
+        els.statusText.textContent = 'Unable to reach Overseer backend: ' + (err && err.message ? err.message : 'unknown error');
+        els.statusLine.classList.add('error-text');
+    }
+
+    async function pollOnce() {
+        if (isPaused) {
+            return;
+        }
+        try {
+            const response = await fetch(API_BASE + '/overseer_state', {
+                headers: { 'Accept': 'application/json' }
+            });
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            const payload = await response.json();
+            renderState(payload);
+        } catch (err) {
+            renderError(err);
+        }
+    }
+
+    function startPolling() {
+        if (pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+        }
+        pollTimer = setInterval(pollOnce, currentIntervalMs);
+    }
+
+    els.pauseToggle.addEventListener('click', () => {
+        isPaused = !isPaused;
+        els.pauseToggle.setAttribute('aria-pressed', String(isPaused));
+        els.pauseToggle.textContent = isPaused ? 'Resume stream' : 'Pause stream';
+        if (isPaused) {
+            els.statusText.textContent = 'Paused · last good tick at ' + (lastOkAt ? new Date(lastOkAt).toLocaleTimeString() : '—');
+        } else {
+            pollOnce();
+        }
+    });
+
+    els.intervalSelect.addEventListener('change', () => {
+        const next = parseInt(els.intervalSelect.value, 10);
+        if (!Number.isNaN(next) && next > 0) {
+            currentIntervalMs = next;
+            startPolling();
+        }
+    });
+
+    els.snapshotButton.addEventListener('click', () => {
+        if (!lastPayload) {
+            els.snapshotPanel.style.display = 'block';
+            els.snapshotBody.textContent = 'No data yet. Waiting for first response from backend.';
+            return;
+        }
+        els.snapshotPanel.style.display = 'block';
+        const pretty = JSON.stringify(lastPayload, null, 2);
+        els.snapshotBody.textContent = pretty;
+    });
+
+    pollOnce();
+    startPolling();
+</script>
+</body>
+</html>
+

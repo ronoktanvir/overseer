@@ -1,54 +1,25 @@
 import asyncio
 import json
-import os
 from pathlib import Path
 from typing import Any, Callable, Optional
 from uuid import uuid4
-
-import anthropic
 
 from openenv.core.env_server.interfaces import Environment
 from openenv.core.env_server.types import EnvironmentMetadata
 
 try:
+    from judge import judge_prediction
     from models import OverseerAction, OverseerObservation, OverseerState
-    from prompts import JUDGE_PROMPT
 except ImportError:  # pragma: no cover
+    from overseer_env.judge import judge_prediction
     from overseer_env.models import OverseerAction, OverseerObservation, OverseerState
-    from overseer_env.prompts import JUDGE_PROMPT
 
 DEFAULT_DATA_PATH = "game_data.json"
-JUDGE_MODEL = "claude-haiku-4-5-20251001"
 
 
 def _load_samples(data_path: str) -> list[dict[str, Any]]:
     with open(data_path, "r") as f:
         return json.load(f)["training_data"]
-
-
-async def _judge_with_anthropic(
-    target_player: str,
-    true_strategy: str,
-    predicted_strategy: str,
-) -> float:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is required to score predictions in the OpenEnv server.")
-
-    client = anthropic.AsyncAnthropic(api_key=api_key)
-    prompt = JUDGE_PROMPT.format(
-        power=target_player,
-        true_strategy=true_strategy,
-        predicted_strategy=predicted_strategy,
-    )
-    response = await client.messages.create(
-        model=JUDGE_MODEL,
-        max_tokens=4,
-        temperature=0,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text = response.content[0].text.strip()
-    return 1.0 if text == "1" else 0.0
 
 
 class OverseerEnvironment(Environment[OverseerAction, OverseerObservation, OverseerState]):
@@ -65,7 +36,7 @@ class OverseerEnvironment(Environment[OverseerAction, OverseerObservation, Overs
         super().__init__()
         self.data_path = data_path
         self._samples = samples if samples is not None else _load_samples(data_path)
-        self._judge_fn = judge_fn or _judge_with_anthropic
+        self._judge_fn = judge_fn or judge_prediction
         self._state = OverseerState(
             episode_id=str(uuid4()),
             step_count=0,
