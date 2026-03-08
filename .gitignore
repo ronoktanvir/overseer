@@ -1,12 +1,16 @@
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
 .env
+.DS_Store
 
-
-game_data.backfilled.json
-game_data.before_more_runs.json
-game_data.pre_history_backfill.json
 openenv_overseer.egg-info/
 
-game_data.json
+outputs/*
+!outputs/.gitkeep
+
+game_data*.json

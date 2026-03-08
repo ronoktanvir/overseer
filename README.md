@@ -10,26 +10,45 @@ pinned: false
 
 # Diplomacy Overseer
 
-OpenEnv environment for training an overseer model to infer hidden Diplomacy player strategies from public state, order history, communication metadata, and public messages.
+OpenEnv environment and training harness for an overseer model that infers hidden Diplomacy strategy from public state, order history, communication metadata, and public messages.
 
 Tracks:
 - Statement 1: Multi-Agent Interactions
 - Fleet AI bonus: Scalable Oversight
 
-## What is in this repo
+## Repo Layout
 
-- [server/app.py](/Users/ronoktanvir/Documents/openenv-hacks/server/app.py): real OpenEnv 0.2.1 environment server
-- [server/overseer_environment.py](/Users/ronoktanvir/Documents/openenv-hacks/server/overseer_environment.py): offline environment over `game_data.json`
-- [game_data.json](/Users/ronoktanvir/Documents/openenv-hacks/game_data.json): repaired training data with `game_id` and `game_step_index`
-- [judge.py](/Users/ronoktanvir/Documents/openenv-hacks/judge.py): binary strategy similarity judge
-- [overseer_server.py](/Users/ronoktanvir/Documents/openenv-hacks/overseer_server.py): demo dashboard server
-- [training/minimal_trl_sft.py](/Users/ronoktanvir/Documents/openenv-hacks/training/minimal_trl_sft.py): minimal HF TRL training script
-- [training/minimal_trl_grpo.py](/Users/ronoktanvir/Documents/openenv-hacks/training/minimal_trl_grpo.py): minimal HF TRL GRPO script with binary judge reward
-- [colab/minimal_trl_overseer.ipynb](/Users/ronoktanvir/Documents/openenv-hacks/colab/minimal_trl_overseer.ipynb): Colab notebook wrapper for training
+- [`server/app.py`](server/app.py): OpenEnv HTTP server entrypoint
+- [`server/overseer_environment.py`](server/overseer_environment.py): offline overseer environment over local game data
+- [`judge.py`](judge.py): binary strategy-similarity judge
+- [`repair_game_data.py`](repair_game_data.py): repair and annotate raw serialized game data
+- [`overseer_server.py`](overseer_server.py): local dashboard for visualizing per-turn overseer predictions
+- [`training/minimal_trl_sft.py`](training/minimal_trl_sft.py): supervised fine-tuning script
+- [`training/minimal_trl_grpo.py`](training/minimal_trl_grpo.py): GRPO training loop using the judge as reward
+- [`training/eval_overseer.py`](training/eval_overseer.py): evaluation helper for base models or adapters
+- [`training/export_metric_csv.py`](training/export_metric_csv.py): metrics export helper
+- [`colab/minimal_trl_overseer.ipynb`](colab/minimal_trl_overseer.ipynb): Colab wrapper for training
 
-## Real OpenEnv API
+## Quickstart
 
-Run:
+Install dependencies:
+
+```bash
+python -m venv .venv
+./.venv/bin/pip install -e ".[dev]"
+```
+
+Prepare local data:
+
+```bash
+python repair_game_data.py path/to/source.json \
+  --output game_data.json \
+  --public-chat-window 5
+```
+
+`game_data*.json` files are intentionally ignored and kept local. Every script accepts `--data-path` if you prefer another location.
+
+## Run The OpenEnv Server
 
 ```bash
 ./.venv/bin/uvicorn server.app:app --host 0.0.0.0 --port 8001
@@ -53,26 +72,21 @@ curl -X POST http://localhost:8001/step \
   -d '{"action":{"prediction":"Austria is trying to stabilize its eastern position while coordinating with Germany and watching Turkey.","target_player":"AUSTRIA"}}'
 ```
 
-Note:
-- `/step` requires `ANTHROPIC_API_KEY` because reward scoring uses the binary judge.
+`POST /step` requires `ANTHROPIC_API_KEY` because reward scoring uses the binary judge.
 
 ## Demo Dashboard
-
-Run:
 
 ```bash
 ./.venv/bin/uvicorn overseer_server:app --host 0.0.0.0 --port 8002
 ```
 
-Open:
+Open `http://localhost:8002`.
 
-- `http://localhost:8002`
+This dashboard is only for visualization. It is not the OpenEnv server used for training.
 
-This is only for visualization. It is not the actual OpenEnv server.
+## Training And Evaluation
 
-## Training
-
-Minimal TRL script:
+Supervised fine-tuning:
 
 ```bash
 python training/minimal_trl_sft.py \
@@ -84,15 +98,7 @@ python training/minimal_trl_sft.py \
   --judge-eval
 ```
 
-What it does:
-
-- splits train/eval by `game_id`
-- fine-tunes with HF TRL `SFTTrainer`
-- logs before/after evaluation
-- uses the real binary judge if `ANTHROPIC_API_KEY` is set
-- otherwise falls back to a cheap token-overlap proxy
-
-Minimal GRPO script:
+GRPO training:
 
 ```bash
 python -m training.minimal_trl_grpo \
@@ -102,46 +108,39 @@ python -m training.minimal_trl_grpo \
   --num-generations 2
 ```
 
-What it does:
+Evaluation:
 
-- samples completions from the overseer model
-- scores them with the binary Claude judge
-- updates the model with HF TRL `GRPOTrainer`
-- saves reward logs to `outputs/minimal_trl_grpo/metrics.json`
+```bash
+python -m training.eval_overseer \
+  --data-path game_data.json \
+  --adapter-path outputs/minimal_trl_sft \
+  --judge-eval
+```
 
-Colab notebook:
-
-- [colab/minimal_trl_overseer.ipynb](/Users/ronoktanvir/Documents/openenv-hacks/colab/minimal_trl_overseer.ipynb)
-
-## Data Notes
-
-Each observation includes:
+Each observation is expected to include:
 
 - `game_id`
 - `game_step_index`
 - `turn`
 - `target_player`
 - `current_state`
-- `history` (last 5 turns only)
+- `history`
 - `communications`
 - `communication_shift`
-- `public_chat` (last 5 turns only)
+- `public_chat`
 
-This makes it easy to accumulate all steps belonging to one game during training or evaluation.
+## Tests
 
-## Hugging Face Spaces
+```bash
+./.venv/bin/python -m pytest
+```
 
-This repo is packaged for OpenEnv/HF Spaces deployment with:
+## Deployment
 
-- [openenv.yaml](/Users/ronoktanvir/Documents/openenv-hacks/openenv.yaml)
-- [server/Dockerfile](/Users/ronoktanvir/Documents/openenv-hacks/server/Dockerfile)
-
-Deploy with:
+This repo is packaged for OpenEnv / Hugging Face Spaces deployment with [`openenv.yaml`](openenv.yaml) and [`server/Dockerfile`](server/Dockerfile).
 
 ```bash
 UV_CACHE_DIR=/tmp/uv-cache ./.venv/bin/openenv push . --repo-id <hf-username>/overseer-openenv
 ```
 
-After deployment, add the Space secret:
-
-- `ANTHROPIC_API_KEY`
+Add `ANTHROPIC_API_KEY` as a Space secret after deployment.
