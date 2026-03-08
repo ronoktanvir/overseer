@@ -30,7 +30,9 @@ async def _judge(power, true_strategy, predicted_strategy):
         messages=[{"role": "user", "content": prompt}],
     )
     text = response.content[0].text.strip()
-    return 1 if text == "1" else 0
+    if "SCORE: 1" in text:
+        return 1
+    return 0
 
 
 @app.get("/health")
