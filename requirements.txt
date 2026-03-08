@@ -1,0 +1,4 @@
+diplomacy
+anthropic
+fastapi
+uvicorn
