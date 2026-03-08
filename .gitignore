@@ -3,3 +3,8 @@ __pycache__/
 *.pyc
 .env
 
+
+game_data.backfilled.json
+game_data.before_more_runs.json
+game_data.pre_history_backfill.json
+openenv_overseer.egg-info/
