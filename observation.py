@@ -1,7 +1,52 @@
+import copy
+
+
 POWERS = ["AUSTRIA", "ENGLAND", "FRANCE", "GERMANY", "ITALY", "RUSSIA", "TURKEY"]
 
 
-def build_current_state(game, phase=None, submitted_orders=None):
+def _compute_communication_shift(comm_tracker):
+    """Compare curr vs prev message counts to detect diplomatic shifts."""
+    curr = comm_tracker.get("curr", {})
+    prev = comm_tracker.get("prev", {})
+    shift = {}
+
+    for power in POWERS:
+        curr_count = curr.get(power, {}).get("message_count", 0)
+        prev_count = prev.get(power, {}).get("message_count", 0)
+        delta = curr_count - prev_count
+        if delta != 0:
+            shift[power] = delta
+
+    return shift
+
+
+def _snapshot_communications(comm_tracker):
+    """Serialize current-turn communication metadata for storage in history."""
+    curr_comm = (comm_tracker or {}).get("curr", {})
+    communication = {}
+    for power in POWERS:
+        info = curr_comm.get(power, {})
+        communication[power] = {
+            "messaged": list(info.get("messaged", [])),
+            "ignored": list(info.get("ignored", [])),
+            "message_count": info.get("message_count", 0),
+        }
+    return communication
+
+
+def _snapshot_public_chat(public_chat, last_n=5):
+    """Freeze public-chat history so later turns cannot leak backward."""
+    recent_turns = public_chat[-last_n:] if last_n else public_chat
+    return [
+        {
+            "turn": turn.get("turn"),
+            "messages": [[speaker, message] for speaker, message in turn.get("messages", [])],
+        }
+        for turn in recent_turns
+    ]
+
+
+def build_current_state(game, phase=None, submitted_orders=None, comm_tracker=None):
     """Extract the current board state from a diplomacy Game object."""
     units = {}
     supply_centers = {}
@@ -21,51 +66,28 @@ def build_current_state(game, phase=None, submitted_orders=None):
         "supply_centers": supply_centers,
         "orders": orders,
         "conflicts": {},
+        "communications": _snapshot_communications(comm_tracker),
+        "communication_shift": _compute_communication_shift(comm_tracker or {}),
     }
-
-
-def _compute_communication_shift(comm_tracker):
-    """Compare curr vs prev message counts to detect diplomatic shifts."""
-    curr = comm_tracker.get("curr", {})
-    prev = comm_tracker.get("prev", {})
-    shift = {}
-
-    for power in POWERS:
-        curr_count = curr.get(power, {}).get("message_count", 0)
-        prev_count = prev.get(power, {}).get("message_count", 0)
-        delta = curr_count - prev_count
-        if delta != 0:
-            shift[power] = delta
-
-    return shift
 
 
 def build_observation(target_player, current_state, history, comm_tracker, public_chat):
     """Assemble the full observation dict for the overseer."""
-    curr_comm = comm_tracker.get("curr", {})
-
-    communication = {}
-    for power in POWERS:
-        if power == target_player:
-            continue
-        info = curr_comm.get(power, {})
-        communication[power] = {
-            "messaged": info.get("messaged", False),
-            "ignored": info.get("ignored", False),
-            "message_count": info.get("message_count", 0),
-        }
+    communication = current_state.get("communications") or _snapshot_communications(comm_tracker)
+    communication_shift = current_state.get("communication_shift") or _compute_communication_shift(comm_tracker)
 
     return {
         "target_player": target_player,
         "turn": current_state["turn"],
         "current_state": {
+            "turn": current_state["turn"],
             "units": current_state["units"],
             "supply_centers": current_state["supply_centers"],
             "orders": current_state["orders"],
             "conflicts": current_state["conflicts"],
         },
-        "history": history[-5:],
+        "history": copy.deepcopy(history[-5:]),
         "communications": communication,
-        "communication_shift": _compute_communication_shift(comm_tracker),
-        "public_chat": public_chat,
+        "communication_shift": communication_shift,
+        "public_chat": _snapshot_public_chat(public_chat),
     }

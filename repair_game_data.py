@@ -3,6 +3,9 @@ import copy
 import json
 from pathlib import Path
 
+SEASON_ORDER = {"S": 0, "F": 1, "W": 2}
+PHASE_TYPE_ORDER = {"M": 0, "R": 1, "A": 2}
+
 
 def contiguous_turn_blocks(samples):
     """Yield consecutive samples that belong to the same turn within a run."""
@@ -14,6 +17,33 @@ def contiguous_turn_blocks(samples):
             end += 1
         yield samples[start:end]
         start = end
+
+
+def phase_sort_key(turn):
+    """Convert a Diplomacy phase like S1904R into a sortable key."""
+    if not turn or len(turn) < 6:
+        return None
+    return (
+        int(turn[1:5]),
+        SEASON_ORDER.get(turn[0], 99),
+        PHASE_TYPE_ORDER.get(turn[-1], 99),
+    )
+
+
+def contiguous_game_blocks(samples):
+    """Yield consecutive samples that belong to the same game run."""
+    if not samples:
+        return
+
+    start = 0
+    previous_key = phase_sort_key(samples[0]["observation"].get("turn"))
+    for idx in range(1, len(samples)):
+        current_key = phase_sort_key(samples[idx]["observation"].get("turn"))
+        if previous_key is not None and current_key is not None and current_key < previous_key:
+            yield samples[start:idx]
+            start = idx
+        previous_key = current_key
+    yield samples[start:]
 
 
 def trim_public_chat(observation, window=None):
@@ -70,6 +100,57 @@ def backfill_target_communications(turn_block):
     return repaired, unresolved
 
 
+def _metadata_score(turn_metadata):
+    communications = turn_metadata.get("communications", {})
+    communication_shift = turn_metadata.get("communication_shift", {})
+    return len(communications) * 10 + len(communication_shift)
+
+
+def backfill_history_communications(game_block):
+    """Backfill per-turn history communication metadata within one game."""
+    turn_metadata = {}
+    for sample in game_block:
+        observation = sample.get("observation", {})
+        turn = observation.get("turn")
+        if not turn:
+            continue
+        candidate = {
+            "communications": copy.deepcopy(observation.get("communications", {})),
+            "communication_shift": copy.deepcopy(observation.get("communication_shift", {})),
+        }
+        if turn not in turn_metadata or _metadata_score(candidate) > _metadata_score(turn_metadata[turn]):
+            turn_metadata[turn] = candidate
+
+    repaired_turns = 0
+    repaired_samples = 0
+    for sample in game_block:
+        observation = sample.get("observation", {})
+        history = observation.get("history", [])
+        sample_changed = False
+        for turn_state in history:
+            turn = turn_state.get("turn")
+            metadata = turn_metadata.get(turn)
+            if not metadata:
+                continue
+
+            changed = False
+            if metadata["communications"] and not turn_state.get("communications"):
+                turn_state["communications"] = copy.deepcopy(metadata["communications"])
+                changed = True
+            if metadata["communication_shift"] and not turn_state.get("communication_shift"):
+                turn_state["communication_shift"] = copy.deepcopy(metadata["communication_shift"])
+                changed = True
+
+            if changed:
+                repaired_turns += 1
+                sample_changed = True
+
+        if sample_changed:
+            repaired_samples += 1
+
+    return repaired_samples, repaired_turns
+
+
 def repair_game_data(data, public_chat_window=None):
     """Repair offline training data without regenerating games."""
     samples = data.get("training_data", [])
@@ -79,6 +160,8 @@ def repair_game_data(data, public_chat_window=None):
         "public_chat_turns_removed": 0,
         "target_communications_backfilled": 0,
         "current_state_turn_added": 0,
+        "history_samples_backfilled": 0,
+        "history_turns_backfilled": 0,
         "unresolved_target_communications": [],
     }
 
@@ -95,6 +178,11 @@ def repair_game_data(data, public_chat_window=None):
         repaired, unresolved = backfill_target_communications(block)
         stats["target_communications_backfilled"] += repaired
         stats["unresolved_target_communications"].extend(unresolved)
+
+    for game_block in contiguous_game_blocks(samples):
+        repaired_samples, repaired_turns = backfill_history_communications(game_block)
+        stats["history_samples_backfilled"] += repaired_samples
+        stats["history_turns_backfilled"] += repaired_turns
 
     return data, stats
 
@@ -144,6 +232,8 @@ def main():
     print(f"Removed {stats['public_chat_turns_removed']} future public-chat turns total")
     print(f"Backfilled target communications in {stats['target_communications_backfilled']} samples")
     print(f"Added current_state.turn in {stats['current_state_turn_added']} samples")
+    print(f"Backfilled history communications in {stats['history_samples_backfilled']} samples")
+    print(f"Filled {stats['history_turns_backfilled']} history turns with communication metadata")
     if stats["unresolved_target_communications"]:
         print(f"Unresolved target communications: {len(stats['unresolved_target_communications'])}")
         for turn, target in stats["unresolved_target_communications"][:10]:
