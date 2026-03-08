@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openenv-overseer"
+version = "0.1.0"
+description = "Diplomacy overseer environment for OpenEnv"
+requires-python = ">=3.11"
+dependencies = [
+    "openenv-core[core]==0.2.1",
+    "anthropic",
+    "diplomacy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+server = "server.app:main"
+
+[tool.setuptools]
+include-package-data = true
+packages = ["server"]
+py-modules = ["client", "models", "prompts"]

@@ -2,3 +2,4 @@ diplomacy
 anthropic
 fastapi
 uvicorn
+openenv-core[core]==0.2.1

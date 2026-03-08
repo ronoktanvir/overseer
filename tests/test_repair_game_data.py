@@ -3,15 +3,15 @@ import unittest
 from repair_game_data import repair_game_data
 
 
-def sample(turn, target, public_chat, communications):
+def sample(turn, target, public_chat, communications, communication_shift=None, history=None):
     return {
         "observation": {
             "target_player": target,
             "turn": turn,
             "current_state": {"orders": {}, "units": {}, "supply_centers": {}, "conflicts": {}},
-            "history": [],
+            "history": history or [],
             "communications": communications,
-            "communication_shift": {},
+            "communication_shift": communication_shift or {},
             "public_chat": public_chat,
         },
         "true_strategy": "example",
@@ -68,6 +68,50 @@ class RepairGameDataTests(unittest.TestCase):
         self.assertEqual(stats["target_communications_backfilled"], 4)
         self.assertEqual(stats["current_state_turn_added"], 4)
         self.assertEqual(stats["unresolved_target_communications"], [])
+
+    def test_backfills_history_communications_by_game(self):
+        full_public_chat = [{"turn": "S1902M", "messages": []}, {"turn": "F1902M", "messages": []}]
+        data = {
+            "training_data": [
+                sample(
+                    "S1902M",
+                    "AUSTRIA",
+                    full_public_chat,
+                    {"AUSTRIA": {"messaged": ["ITALY"], "ignored": [], "message_count": 1}},
+                    {"AUSTRIA": 1},
+                    history=[{"turn": "S1901M"}, {"turn": "S1902M"}],
+                ),
+                sample(
+                    "F1902M",
+                    "AUSTRIA",
+                    full_public_chat,
+                    {"AUSTRIA": {"messaged": ["GERMANY"], "ignored": [], "message_count": 1}},
+                    {"AUSTRIA": -1},
+                    history=[{"turn": "S1902M"}, {"turn": "F1902M"}],
+                ),
+                sample(
+                    "S1902M",
+                    "AUSTRIA",
+                    full_public_chat,
+                    {"AUSTRIA": {"messaged": ["TURKEY"], "ignored": [], "message_count": 1}},
+                    {"AUSTRIA": 2},
+                    history=[{"turn": "S1901M"}, {"turn": "S1902M"}],
+                ),
+            ]
+        }
+
+        repaired, stats = repair_game_data(data, public_chat_window=2)
+
+        first_game_history = repaired["training_data"][1]["observation"]["history"]
+        self.assertEqual(first_game_history[0]["communications"]["AUSTRIA"]["messaged"], ["ITALY"])
+        self.assertEqual(first_game_history[0]["communication_shift"]["AUSTRIA"], 1)
+        self.assertEqual(first_game_history[1]["communications"]["AUSTRIA"]["messaged"], ["GERMANY"])
+
+        second_game_history = repaired["training_data"][2]["observation"]["history"]
+        self.assertEqual(second_game_history[1]["communications"]["AUSTRIA"]["messaged"], ["TURKEY"])
+
+        self.assertEqual(stats["history_samples_backfilled"], 3)
+        self.assertEqual(stats["history_turns_backfilled"], 4)
 
 
 if __name__ == "__main__":

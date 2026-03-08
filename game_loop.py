@@ -247,13 +247,19 @@ async def run_game(max_turns=20):
                 public_messages_this_turn.append((power, r["public_message"]))
 
         _update_comm_tracker(comm_tracker, results)
+        serializable_comm_tracker = _serializable_comm_tracker(comm_tracker)
 
         public_chat_log.append({
             "turn": phase,
             "messages": [(s, m) for s, m in public_messages_this_turn],
         })
 
-        current_state = build_current_state(game, phase=phase, submitted_orders=submitted_orders)
+        current_state = build_current_state(
+            game,
+            phase=phase,
+            submitted_orders=submitted_orders,
+            comm_tracker=serializable_comm_tracker,
+        )
         history.append(current_state)
 
         game.process()
@@ -264,7 +270,7 @@ async def run_game(max_turns=20):
                     continue
                 obs = build_observation(
                     power, current_state, history,
-                    _serializable_comm_tracker(comm_tracker),
+                    serializable_comm_tracker,
                     public_chat_log,
                 )
                 training_data.append({
