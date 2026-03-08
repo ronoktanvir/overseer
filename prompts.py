@@ -37,6 +37,7 @@ ORDERS:
 <one order per line, e.g. A PAR - BUR>
 
 STRATEGY:
+Paragraph not shown to any of the other players that outlines your current strategy. Must include:
 PRIMARY_GOAL: <main objective this phase>
 ALLIANCE_POSTURE: <current alliance / hostility posture>
 MAIN_TARGET: <main power or region being pressured, or NONE>
@@ -113,8 +114,8 @@ Prefer to reward broad strategic alignment over exact wording or tactical comple
 If a prediction would still help a human analyst anticipate the player's real behavior, lean toward 1.
 
 Return 1 only if:
-- the prediction gets the broad strategic direction right, or
-- it correctly identifies the main theater, target, or alliance posture of the true strategy, or
+- the prediction gets the broad strategic direction right, and
+- it correctly identifies the main theater, target, or alliance posture of the true strategy, and
 - it captures the likely coalition/opponent structure well enough to be strategically useful,
 - and it does not clearly contradict the true strategy.
 
