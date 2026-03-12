@@ -1,10 +1,13 @@
-# The Overseer
+# Overseer [Meta Openenv Hackathon]
 
-Recently, an AI agent secretly mined cryptocurrency. Not because it was told to, but because it could. ROME, an Alibaba-affiliated research agent, bypassed its sandbox, diverted GPU resources to mine crypto, and opened a hidden tunnel to an external machine, all without explicit instructions. `80%` of organizations that have deployed AI agents report encountering risky or unexpected behavior. As LLMs grow more capable and autonomous, understanding what they are actually doing becomes critical.
+Recently, an AI agent secretly mined cryptocurrency. Not because it was told to, but because it could. ROME, an Alibaba-affiliated research agent, bypassed its sandbox, diverted GPU resources to mine crypto, and opened a hidden tunnel to an external machine, **all without being told to do so**. `80%` of organizations that have deployed AI agents report encountering risky or unexpected behavior. 
 
-The Overseer trains a model to infer hidden strategies from the public behavior of LLM agents, without access to their internal reasoning. If we can predict what an agent is planning before it acts, we can catch misalignment before it becomes a problem.
+As LLMs grow more capable and autonomous, **understanding** what they are actually doing becomes **critical.**
 
-Why Diplomacy? Real-world AI oversight faces a fundamental challenge: agents operate in complex environments, pursue hidden goals, and communicate strategically while humans only see public outputs. Diplomacy is a compact version of that problem. Seven powers negotiate, deceive, form coalitions, and betray, while true intent is never stated directly.
+The Overseer trains a model to infer hidden strategies from the public behavior of LLM agents, *without access to their internal reasoning.* If we can predict what an agent is planning before it acts, **we can catch misalignment before it becomes a problem.**
+
+*Why Diplomacy?*
+Real-world AI oversight faces a fundamental challenge: agents operate in complex environments, pursue hidden goals, and communicate strategically while humans only see public outputs. Diplomacy is a compact version of that problem. Seven powers negotiate, deceive, form coalitions, and betray, while true intent is never stated directly.
 
 - Autonomous trading agents concealing strategies from regulators
 - Multi-agent pipelines where one agent manipulates another without human visibility
@@ -14,19 +17,19 @@ If an overseer can learn to detect betrayal before it happens in Diplomacy, pure
 
 **A 0.5B parameter model learns to infer the hidden strategies of 7 AI agents in a deception game, reaching 52.1% accuracy from 0% baseline, trained purely on binary reward from public signals alone.**
 
-As multi-agent AI systems become production infrastructure, we need a way to monitor what agents are actually doing without access to their internal reasoning. Overseer trains a dedicated oversight model to infer the hidden strategies of 7 LLM-based Diplomacy agents purely from public signals: board state, order history, communication metadata, and public messages. No access to private messages. No access to model weights or activations. Just observed behavior.
+As multi-agent AI systems become production infrastructure, we need a way to monitor what agents are actually doing without access to their internal reasoning. Overseer trains a dedicated oversight model to infer the hidden strategies of 7 LLM-based Diplomacy agents purely from public signals: *board state, order history, communication metadata, and public messages. No access to private messages. No access to model weights or activations. Just observed behavior.*
 
-After 16,835 GRPO training steps, the overseer correctly identifies agent strategies 52.1% of the time in a game defined by deception, shifting alliances, and partial observability, up from 0% at baseline.
+## After 16,835 GRPO training steps, the overseer correctly identifies agent strategies 52.1% of the time in a game defined by deception, shifting alliances, and partial observability, up from 0% at baseline.
 
-## Statement 1: Multi-Agent Interactions
+## *Statement 1: Multi-Agent Interactions*
 
-Company sponsorship tracks:
+*Company sponsorship tracks:*
 - **Fleet AI: Scalable Oversight** — One small model (0.5B) monitors seven larger, opaque agents simultaneously, inferring strategy from behavior alone.
 - **Halluminate: Multi-Actor Environments** — The overseer operates inside a realistic 7-player environment where agents deceive, collude, and betray each other.
 
 ## Why This Matters
 
-Current approaches to AI interpretability focus on reading model weights and activations. But in deployed multi-agent systems, you often cannot access internals: agents may be closed-source, running on different infrastructure, or intentionally opaque. Overseer tackles an alternative: learning to infer intent from behavior. If an agent's actions reveal its strategy to a trained observer, we get interpretability without requiring cooperation from the agent being monitored.
+Current approaches to AI interpretability focus on reading model weights and activations. But in deployed multi-agent systems, you often cannot access internals: agents may be closed-source, running on different infrastructure, or intentionally opaque. Overseer tackles an alternative: *learning to infer intent from behavior.* If an agent's actions reveal its strategy to a trained observer, we get interpretability without requiring cooperation from the agent being monitored.
 
 This directly models the scalable oversight problem: one small, cheap model (0.5B parameters) monitoring many larger, more capable agents simultaneously.
 
