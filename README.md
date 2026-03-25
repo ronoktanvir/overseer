@@ -1,4 +1,4 @@
-# Overseer [Meta Openenv Hackathon]
+# Overseer [Winner 🏆 @ Meta's OpenEnv Hackathon]
 
 Recently, an AI agent secretly mined cryptocurrency. Not because it was told to, but because it could. ROME, an Alibaba-affiliated research agent, bypassed its sandbox, diverted GPU resources to mine crypto, and opened a hidden tunnel to an external machine, **all without being told to do so**. `80%` of organizations that have deployed AI agents report encountering risky or unexpected behavior. 
 
@@ -20,7 +20,7 @@ As multi-agent AI systems become production infrastructure, we need a way to mon
 ## A 0.5B parameter model learns to infer the hidden strategies of 7 AI agents in a deception game trained purely on binary reward from public signals alone. After 16,835 GRPO training steps, the overseer correctly identifies agent strategies 52.1% of the time in a game defined by deception, shifting alliances, and partial observability, up from 0% at baseline.
 
 **Statement 1: Multi-Agent Interactions**
-- Fleet AI: Scalable Oversight — *One small model (0.5B) monitors seven larger, opaque agents simultaneously, inferring strategy from behavior alone.*
+- (WON 🏆 ) Fleet AI: Scalable Oversight — *One small model (0.5B) monitors seven larger, opaque agents simultaneously, inferring strategy from behavior alone.*
 - Halluminate: Multi-Actor Environments — *The overseer operates inside a realistic 7-player environment where agents deceive, collude, and betray each other.*
 
 ## Why This Matters
